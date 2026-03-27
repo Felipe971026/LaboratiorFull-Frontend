@@ -11,6 +11,9 @@ interface Props {
   onUpdate: (id: string, data: Partial<LabResultData>) => void;
 }
 
+/**
+ * Modal component to display and edit detailed lab results
+ */
 export const LaboratorioDetailModal: React.FC<Props> = ({ result, onClose, onDelete, onUpdate }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedResult, setEditedResult] = useState<LabResultData>(result);

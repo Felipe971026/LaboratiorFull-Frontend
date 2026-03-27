@@ -11,6 +11,10 @@ import { InsumosHome } from './pages/insumos/InsumosHome';
 import { Kardex } from './pages/insumos/Kardex';
 import { InventoryAudit } from './pages/insumos/InventoryAudit';
 
+/**
+ * Main Application Component
+ * Handles global routing and layout
+ */
 export default function App() {
   return (
     <Router>

@@ -86,33 +86,32 @@ export const DisposicionForm: React.FC<DisposicionFormProps> = ({ onSubmit, isSu
       )}
 
       <div className="space-y-6">
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-xs font-bold text-zinc-500 uppercase mb-1 flex items-center gap-2">
-                ID Unidad *
-              </label>
-              <div className="flex gap-2">
-                <input type="text" name="unitId" value={formData.unitId} onChange={handleChange} className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 focus:ring-2 focus:ring-rose-500 outline-none" required />
-                <button type="button" onClick={() => handleLookupUnit('unitId')} disabled={searchingUnit} className="shrink-0 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap disabled:opacity-50">
-                  <Search size={16} className={searchingUnit ? 'animate-spin' : ''} />
-                  {searchingUnit ? 'Buscando...' : 'Validar'}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-zinc-500 uppercase mb-1 flex items-center gap-2">
-                Sello Calidad
-              </label>
-              <div className="flex gap-2">
-                <input type="text" name="qualitySeal" value={formData.qualitySeal} onChange={handleChange} className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 focus:ring-2 focus:ring-rose-500 outline-none" />
-                <button type="button" onClick={() => handleLookupUnit('qualitySeal')} disabled={searchingUnit} className="shrink-0 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap disabled:opacity-50">
-                  <Search size={16} className={searchingUnit ? 'animate-spin' : ''} />
-                  {searchingUnit ? 'Buscando...' : 'Validar'}
-                </button>
-              </div>
+        <div className="space-y-6">
+          <div>
+            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1 flex items-center gap-2">
+              ID Unidad *
+            </label>
+            <div className="flex gap-2">
+              <input type="text" name="unitId" value={formData.unitId} onChange={handleChange} className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 focus:ring-2 focus:ring-rose-500 outline-none" required />
+              <button type="button" onClick={() => handleLookupUnit('unitId')} disabled={searchingUnit} className="shrink-0 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap disabled:opacity-50">
+                <Search size={16} className={searchingUnit ? 'animate-spin' : ''} />
+                {searchingUnit ? 'Buscando...' : 'Validar'}
+              </button>
             </div>
           </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1 flex items-center gap-2">
+              Sello Calidad
+            </label>
+            <div className="flex gap-2">
+              <input type="text" name="qualitySeal" value={formData.qualitySeal} onChange={handleChange} className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 focus:ring-2 focus:ring-rose-500 outline-none" />
+              <button type="button" onClick={() => handleLookupUnit('qualitySeal')} disabled={searchingUnit} className="shrink-0 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap disabled:opacity-50">
+                <Search size={16} className={searchingUnit ? 'animate-spin' : ''} />
+                {searchingUnit ? 'Buscando...' : 'Validar'}
+              </button>
+            </div>
+          </div>
+        </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -160,8 +159,8 @@ export const DisposicionForm: React.FC<DisposicionFormProps> = ({ onSubmit, isSu
             <textarea name="observations" value={formData.observations} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:ring-2 focus:ring-rose-500 outline-none h-24" />
           </div>
         </div>
-      </div>
 
+      {/* Botón de Registro */}
       <button type="submit" disabled={isSubmitting} className="w-full bg-rose-600 text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-rose-100 hover:bg-rose-700 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3">
         {isSubmitting ? (
           <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin" />
