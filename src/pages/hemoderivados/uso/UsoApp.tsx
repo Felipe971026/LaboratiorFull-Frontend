@@ -4,9 +4,10 @@ import { ArrowLeft, Activity, History, LogIn, LogOut, ShieldCheck, Trash2, Plus 
 import { UsoForm } from '../components/UsoForm';
 import { UsoRecordCard } from '../components/UsoRecordCard';
 import { TransfusionUseRecord } from '../types';
-import { auth, loginWithGoogle, logout } from '../../../firebase';
+import { auth, db, loginWithGoogle, logout, handleFirestoreError, OperationType } from '../../../firebase';
+import { useGoogleSheets } from '../hooks/useGoogleSheets';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { dataService } from '../../../services/dataService';
+import { collection, onSnapshot, query, orderBy, addDoc, deleteDoc, doc, where, getDocs, updateDoc } from 'firebase/firestore';
 import { DeleteConfirmationModal } from '../../laboratorio/components/DeleteConfirmationModal';
 
 export const UsoApp: React.FC = () => {
@@ -19,8 +20,7 @@ export const UsoApp: React.FC = () => {
   
   const [isSystemUnlocked, setIsSystemUnlocked] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const { isGoogleConnected, isSyncing, setIsSyncing, handleConnectGoogle, handleDisconnectGoogle, handleGoogleLogin } = useGoogleSheets(user, isSystemUnlocked);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -40,36 +40,51 @@ export const UsoApp: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const checkGoogleStatus = async () => {
-      try {
-        const response = await fetch('/api/auth/google/status');
-        const data = await response.json();
-        setIsGoogleConnected(data.connected);
-      } catch (error) {
-        console.error('Error checking Google status:', error);
-      }
-    };
-    if (user && isSystemUnlocked) checkGoogleStatus();
-  }, [user, isSystemUnlocked]);
-
-  useEffect(() => {
     if (!isAuthReady || !user || !isSystemUnlocked) return;
 
     const path = 'transfusionUse';
 
-    const fetchRecords = async () => {
+    // Auto-cleanup: Delete records older than 30 days
+    const cleanupOldRecords = async () => {
       try {
-        const recordsData = await dataService.getRecords<TransfusionUseRecord>(path);
-        setRecords(recordsData);
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const cutoffTimestamp = thirtyDaysAgo.toISOString();
+
+        const cleanupQuery = query(
+          collection(db, path),
+          where('createdAt', '<', cutoffTimestamp)
+        );
+        
+        const snapshot = await getDocs(cleanupQuery);
+        
+        if (!snapshot.empty) {
+          console.log(`Auto-limpieza: Borrando ${snapshot.size} registros antiguos...`);
+          const deletePromises = snapshot.docs.map(docSnapshot => 
+            deleteDoc(doc(db, path, docSnapshot.id))
+          );
+          await Promise.all(deletePromises);
+          console.log('Auto-limpieza completada.');
+        }
       } catch (error) {
-        console.error('Error fetching transfusion records:', error);
+        console.error('Error en auto-limpieza de registros antiguos:', error);
       }
     };
 
-    fetchRecords();
-    const interval = setInterval(fetchRecords, 10000);
+    cleanupOldRecords();
 
-    return () => clearInterval(interval);
+    const q = query(collection(db, path), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const recordsData: TransfusionUseRecord[] = [];
+      snapshot.forEach((doc) => {
+        recordsData.push({ id: doc.id, ...doc.data() } as TransfusionUseRecord);
+      });
+      setRecords(recordsData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
+
+    return () => unsubscribe();
   }, [isAuthReady, user, isSystemUnlocked]);
 
   const handleLogin = (e: React.FormEvent) => {
@@ -90,55 +105,17 @@ export const UsoApp: React.FC = () => {
     }
   };
 
-  const handleConnectGoogle = async () => {
-    try {
-      const response = await fetch('/api/auth/google/url');
-      const data = await response.json();
-      
-      if (!response.ok) {
-        alert(data.error || 'Error al conectar con Google');
-        return;
-      }
-      
-      window.open(data.url, 'google_auth_popup', 'width=600,height=700');
-    } catch (error) {
-      console.error('Error getting Google auth URL:', error);
-      alert('Error de red al intentar conectar con Google');
-    }
-  };
-
-  const handleDisconnectGoogle = async () => {
-    try {
-      await fetch('/api/auth/google/logout', { method: 'POST' });
-      setIsGoogleConnected(false);
-    } catch (error) {
-      console.error('Error logging out of Google:', error);
-    }
-  };
-
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
-        setIsGoogleConnected(true);
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
   const handleSubmit = async (formData: Omit<TransfusionUseRecord, 'id' | 'createdAt' | 'uid' | 'userEmail'>) => {
     if (!user) return;
     setIsSyncing(true);
     try {
-      let savedRecord: TransfusionUseRecord;
       if (editingRecord?.id) {
         const updateData = {
-          ...editingRecord,
           ...formData,
           updatedAt: new Date().toISOString(),
           updatedBy: user.email || 'Desconocido'
         };
-        savedRecord = await dataService.saveRecord<any>('transfusionUse', updateData) as TransfusionUseRecord;
+        await updateDoc(doc(db, 'transfusionUse', editingRecord.id), updateData);
         setEditingRecord(null);
       } else {
         const fullRecord = {
@@ -148,25 +125,20 @@ export const UsoApp: React.FC = () => {
           userEmail: user.email || 'Desconocido'
         };
 
-        savedRecord = await dataService.saveRecord<any>('transfusionUse', fullRecord) as TransfusionUseRecord;
+        await addDoc(collection(db, 'transfusionUse'), fullRecord);
         
         if (isGoogleConnected) {
           await fetch('/api/sync/sheets/uso', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ record: savedRecord }),
+            body: JSON.stringify(fullRecord),
           });
         }
       }
       
-      // Refresh local state
-      const updatedRecords = await dataService.getRecords<TransfusionUseRecord>('transfusionUse');
-      setRecords(updatedRecords);
-      
       setShowForm(false);
     } catch (error) {
-      console.error('Error saving record:', error);
-      alert('Error al guardar el registro.');
+      handleFirestoreError(error, editingRecord ? OperationType.UPDATE : OperationType.CREATE, 'transfusionUse');
     } finally {
       setIsSyncing(false);
     }
@@ -180,17 +152,11 @@ export const UsoApp: React.FC = () => {
   const confirmDelete = async () => {
     if (recordToDelete) {
       try {
-        await dataService.deleteRecord('transfusionUse', recordToDelete);
-        
-        // Refresh local state
-        const updatedRecords = await dataService.getRecords<TransfusionUseRecord>('transfusionUse');
-        setRecords(updatedRecords);
-        
+        await deleteDoc(doc(db, 'transfusionUse', recordToDelete));
         setRecordToDelete(null);
         setShowDeleteConfirm(false);
       } catch (error) {
-        console.error('Error deleting record:', error);
-        alert('Error al eliminar el registro.');
+        handleFirestoreError(error, OperationType.DELETE, `transfusionUse/${recordToDelete}`);
       }
     }
   };
@@ -249,7 +215,7 @@ export const UsoApp: React.FC = () => {
           <div className="max-w-md mx-auto mt-20 text-center space-y-6">
             <div className="bg-emerald-50 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto"><ShieldCheck className="text-emerald-600" size={40} /></div>
             <h2 className="text-3xl font-bold text-zinc-900">Paso 1: Autenticación</h2>
-            <button onClick={loginWithGoogle} className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-3"><LogIn size={24} />Continuar con Google</button>
+            <button onClick={handleGoogleLogin} className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-3"><LogIn size={24} />Continuar con Google</button>
           </div>
         ) : !isSystemUnlocked ? (
           <div className="max-w-md mx-auto mt-20 text-center space-y-6">

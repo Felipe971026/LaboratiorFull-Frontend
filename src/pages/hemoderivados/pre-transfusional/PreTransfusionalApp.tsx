@@ -6,9 +6,10 @@ import { RecordCard } from '../components/RecordCard';
 import { BloodTestRecord } from '../types';
 import { Droplets, History, Plus, Search, LogIn, LogOut, User as UserIcon, ShieldCheck, X, FileText, Calendar, UserCheck, Activity, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { auth, loginWithGoogle, logout } from '../../../firebase';
+import { auth, db, loginWithGoogle, logout, handleFirestoreError, OperationType } from '../../../firebase';
+import { useGoogleSheets } from '../hooks/useGoogleSheets';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { dataService } from '../../../services/dataService';
+import { collection, onSnapshot, query, orderBy, addDoc, doc, deleteDoc, where, getDocs, updateDoc } from 'firebase/firestore';
 
 export const PreTransfusionalApp: React.FC = () => {
   const navigate = useNavigate();
@@ -28,26 +29,7 @@ export const PreTransfusionalApp: React.FC = () => {
 
   const [isSystemUnlocked, setIsSystemUnlocked] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  const syncToSheets = async (record: BloodTestRecord) => {
-    if (!isGoogleConnected) return;
-    
-    try {
-      const response = await fetch('/api/sync/sheets/pre-transfusional', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ record }),
-      });
-      
-      if (!response.ok) {
-        console.error('Failed to sync to Google Sheets');
-      }
-    } catch (error) {
-      console.error('Error syncing to Google Sheets:', error);
-    }
-  };
+  const { isGoogleConnected, isSyncing, setIsSyncing, handleConnectGoogle, handleDisconnectGoogle, handleGoogleLogin } = useGoogleSheets(user, isSystemUnlocked);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -64,103 +46,6 @@ export const PreTransfusionalApp: React.FC = () => {
     });
     return () => unsubscribe();
   }, []);
-
-  useEffect(() => {
-    const checkGoogleStatus = async () => {
-      try {
-        const response = await fetch('/api/auth/google/status');
-        const data = await response.json();
-        setIsGoogleConnected(data.connected);
-      } catch (error) {
-        console.error('Error checking Google status:', error);
-      }
-    };
-    if (user && isSystemUnlocked) {
-      checkGoogleStatus();
-    }
-  }, [user, isSystemUnlocked]);
-
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
-        setIsGoogleConnected(true);
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
-        setIsGoogleConnected(true);
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
-  const handleConnectGoogle = async () => {
-    try {
-      const response = await fetch('/api/auth/google/url');
-      const data = await response.json();
-      
-      if (!response.ok) {
-        alert(data.error || 'Error al conectar con Google');
-        return;
-      }
-      
-      window.open(data.url, 'google_auth_popup', 'width=600,height=700');
-    } catch (error) {
-      console.error('Error getting Google auth URL:', error);
-      alert('Error de red al intentar conectar con Google');
-    }
-  };
-
-  const handleDisconnectGoogle = async () => {
-    try {
-      await fetch('/api/auth/google/logout', { method: 'POST' });
-      setIsGoogleConnected(false);
-    } catch (error) {
-      console.error('Error logging out of Google:', error);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    try {
-      await loginWithGoogle();
-    } catch (error: any) {
-      if (error.code === 'auth/popup-closed-by-user') {
-        console.log('El usuario cerró la ventana de inicio de sesión.');
-      } else {
-        console.error('Error al iniciar sesión con Google:', error);
-      }
-    }
-  };
-
-  const handleConnectGoogle = async () => {
-    try {
-      const response = await fetch('/api/auth/google/url');
-      const data = await response.json();
-      if (!response.ok) {
-        alert(data.error || 'Error al conectar con Google');
-        return;
-      }
-      window.open(data.url, 'google_auth_popup', 'width=600,height=700');
-    } catch (error) {
-      console.error('Error getting Google auth URL:', error);
-      alert('Error de red al intentar conectar con Google');
-    }
-  };
-
-  const handleDisconnectGoogle = async () => {
-    try {
-      await fetch('/api/auth/google/logout', { method: 'POST' });
-      setIsGoogleConnected(false);
-    } catch (error) {
-      console.error('Error logging out of Google:', error);
-    }
-  };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -193,27 +78,79 @@ export const PreTransfusionalApp: React.FC = () => {
 
     const path = 'bloodTestRecords';
 
-    const fetchAllData = async () => {
+    // Auto-cleanup: Delete records older than 30 days
+    const cleanupOldRecords = async () => {
       try {
-        const [recordsData, receivedUnitsData, transfusionData, dispositionData] = await Promise.all([
-          dataService.getRecords<BloodTestRecord>(path),
-          dataService.getRecords<any>('receivedUnits'),
-          dataService.getRecords<any>('transfusionUse'),
-          dataService.getRecords<any>('finalDisposition')
-        ]);
-        setRecords(recordsData);
-        setReceivedUnits(receivedUnitsData);
-        setTransfusionRecords(transfusionData);
-        setDispositionRecords(dispositionData);
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const cutoffTimestamp = thirtyDaysAgo.toISOString();
+
+        const cleanupQuery = query(
+          collection(db, path),
+          where('createdAt', '<', cutoffTimestamp)
+        );
+        
+        const snapshot = await getDocs(cleanupQuery);
+        
+        if (!snapshot.empty) {
+          console.log(`Auto-limpieza: Borrando ${snapshot.size} registros antiguos...`);
+          const deletePromises = snapshot.docs.map(docSnapshot => 
+            deleteDoc(doc(db, path, docSnapshot.id))
+          );
+          await Promise.all(deletePromises);
+          console.log('Auto-limpieza completada.');
+        }
       } catch (error) {
-        console.error('Error fetching data via API:', error);
+        console.error('Error en auto-limpieza de registros antiguos:', error);
       }
     };
 
-    fetchAllData();
-    const interval = setInterval(fetchAllData, 10000); // Poll every 10s
+    cleanupOldRecords();
 
-    return () => clearInterval(interval);
+    const q = query(collection(db, path), orderBy('createdAt', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedRecords = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as BloodTestRecord[];
+      setRecords(fetchedRecords);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
+    });
+
+    const receivedUnitsPath = 'receivedUnits';
+    const qReceivedUnits = query(collection(db, receivedUnitsPath), orderBy('createdAt', 'desc'));
+    const unsubscribeReceivedUnits = onSnapshot(qReceivedUnits, (snapshot) => {
+      const fetchedReceivedUnits = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setReceivedUnits(fetchedReceivedUnits);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, receivedUnitsPath);
+    });
+
+    const transfusionPath = 'transfusionUse';
+    const qTransfusion = query(collection(db, transfusionPath));
+    const unsubscribeTransfusion = onSnapshot(qTransfusion, (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setTransfusionRecords(fetched);
+    });
+
+    const dispositionPath = 'finalDisposition';
+    const qDisposition = query(collection(db, dispositionPath));
+    const unsubscribeDisposition = onSnapshot(qDisposition, (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setDispositionRecords(fetched);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeReceivedUnits();
+      unsubscribeTransfusion();
+      unsubscribeDisposition();
+    };
   }, [isAuthReady, user, isSystemUnlocked]);
 
   const saveRecord = async (recordData: Omit<BloodTestRecord, 'id' | 'createdAt' | 'uid' | 'userEmail'>) => {
@@ -221,17 +158,30 @@ export const PreTransfusionalApp: React.FC = () => {
 
     const path = 'bloodTestRecords';
     try {
-      let savedRecord: BloodTestRecord;
-      
       if (editingRecord?.id) {
         // Update existing record
         const updateData = {
-          ...editingRecord,
           ...recordData,
           updatedAt: new Date().toISOString(),
           updatedBy: user.email || user.uid,
         };
-        savedRecord = await dataService.saveRecord<any>(path, updateData) as BloodTestRecord;
+        await updateDoc(doc(db, path, editingRecord.id), updateData);
+        
+        // Sync update to Google Sheets if connected
+        if (isGoogleConnected) {
+          setIsSyncing(true);
+          try {
+            await fetch('/api/sync/sheets/update', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: editingRecord.id, ...updateData }),
+            });
+          } catch (syncError) {
+            console.error('Error syncing update to Google Sheets:', syncError);
+          } finally {
+            setIsSyncing(false);
+          }
+        }
       } else {
         // Create new record
         const newRecord = {
@@ -240,30 +190,29 @@ export const PreTransfusionalApp: React.FC = () => {
           userEmail: user.email || '',
           createdAt: new Date().toISOString(),
         };
-        savedRecord = await dataService.saveRecord<any>(path, newRecord) as BloodTestRecord;
-      }
+        await addDoc(collection(db, path), newRecord);
 
-      // Sync to Google Sheets if connected
-      if (isGoogleConnected) {
-        setIsSyncing(true);
-        try {
-          await syncToSheets(savedRecord);
-        } catch (syncError) {
-          console.error('Error syncing to Google Sheets:', syncError);
-        } finally {
-          setIsSyncing(false);
+        // Sync to Google Sheets if connected
+        if (isGoogleConnected) {
+          setIsSyncing(true);
+          try {
+            await fetch('/api/sync/sheets', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newRecord),
+            });
+          } catch (syncError) {
+            console.error('Error syncing to Google Sheets:', syncError);
+          } finally {
+            setIsSyncing(false);
+          }
         }
       }
-
-      // Refresh local state
-      const updatedRecords = await dataService.getRecords<BloodTestRecord>(path);
-      setRecords(updatedRecords);
 
       setEditingRecord(null);
       setShowForm(false);
     } catch (error) {
-      console.error('Error saving record:', error);
-      alert('Error al guardar el registro.');
+      handleFirestoreError(error, editingRecord ? OperationType.UPDATE : OperationType.CREATE, path);
     }
   };
 
@@ -285,16 +234,10 @@ export const PreTransfusionalApp: React.FC = () => {
     if (!recordToDelete) return;
     const path = 'bloodTestRecords';
     try {
-      await dataService.deleteRecord(path, recordToDelete);
-      
-      // Refresh local state
-      const updatedRecords = await dataService.getRecords<BloodTestRecord>(path);
-      setRecords(updatedRecords);
-      
+      await deleteDoc(doc(db, path, recordToDelete));
       setRecordToDelete(null);
     } catch (error) {
-      console.error('Error deleting record:', error);
-      alert('Error al eliminar el registro.');
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   };
 

@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trash2, History, LogIn, ShieldCheck, CheckCircle, Truck } from 'lucide-react';
 import { DisposicionForm } from '../components/DisposicionForm';
 import { FinalDispositionRecord } from '../types';
-import { auth, loginWithGoogle } from '../../../firebase';
+import { auth, db, loginWithGoogle, handleFirestoreError, OperationType } from '../../../firebase';
+import { useGoogleSheets } from '../hooks/useGoogleSheets';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { dataService } from '../../../services/dataService';
+import { collection, onSnapshot, query, orderBy, addDoc, deleteDoc, doc, where, getDocs, updateDoc } from 'firebase/firestore';
 import { DeleteConfirmationModal } from '../../laboratorio/components/DeleteConfirmationModal';
 
 export const DisposicionApp: React.FC = () => {
@@ -17,8 +18,7 @@ export const DisposicionApp: React.FC = () => {
   
   const [isSystemUnlocked, setIsSystemUnlocked] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const { isGoogleConnected, isSyncing, setIsSyncing, handleConnectGoogle, handleDisconnectGoogle, handleGoogleLogin } = useGoogleSheets(user, isSystemUnlocked);
   const [editingRecord, setEditingRecord] = useState<FinalDispositionRecord | null>(null);
 
   const [username, setUsername] = useState('');
@@ -39,36 +39,51 @@ export const DisposicionApp: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const checkGoogleStatus = async () => {
-      try {
-        const response = await fetch('/api/auth/google/status');
-        const data = await response.json();
-        setIsGoogleConnected(data.connected);
-      } catch (error) {
-        console.error('Error checking Google status:', error);
-      }
-    };
-    if (user && isSystemUnlocked) checkGoogleStatus();
-  }, [user, isSystemUnlocked]);
-
-  useEffect(() => {
     if (!isAuthReady || !user || !isSystemUnlocked) return;
 
     const path = 'finalDisposition';
 
-    const fetchRecords = async () => {
+    // Auto-cleanup: Delete records older than 30 days
+    const cleanupOldRecords = async () => {
       try {
-        const recordsData = await dataService.getRecords<FinalDispositionRecord>(path);
-        setRecords(recordsData);
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const cutoffTimestamp = thirtyDaysAgo.toISOString();
+
+        const cleanupQuery = query(
+          collection(db, path),
+          where('createdAt', '<', cutoffTimestamp)
+        );
+        
+        const snapshot = await getDocs(cleanupQuery);
+        
+        if (!snapshot.empty) {
+          console.log(`Auto-limpieza: Borrando ${snapshot.size} registros antiguos...`);
+          const deletePromises = snapshot.docs.map(docSnapshot => 
+            deleteDoc(doc(db, path, docSnapshot.id))
+          );
+          await Promise.all(deletePromises);
+          console.log('Auto-limpieza completada.');
+        }
       } catch (error) {
-        console.error('Error fetching disposition records:', error);
+        console.error('Error en auto-limpieza de registros antiguos:', error);
       }
     };
 
-    fetchRecords();
-    const interval = setInterval(fetchRecords, 10000);
+    cleanupOldRecords();
 
-    return () => clearInterval(interval);
+    const q = query(collection(db, path), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const recordsData: FinalDispositionRecord[] = [];
+      snapshot.forEach((doc) => {
+        recordsData.push({ id: doc.id, ...doc.data() } as FinalDispositionRecord);
+      });
+      setRecords(recordsData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
+
+    return () => unsubscribe();
   }, [isAuthReady, user, isSystemUnlocked]);
 
   const handleLogin = (e: React.FormEvent) => {
@@ -89,55 +104,17 @@ export const DisposicionApp: React.FC = () => {
     }
   };
 
-  const handleConnectGoogle = async () => {
-    try {
-      const response = await fetch('/api/auth/google/url');
-      const data = await response.json();
-      
-      if (!response.ok) {
-        alert(data.error || 'Error al conectar con Google');
-        return;
-      }
-      
-      window.open(data.url, 'google_auth_popup', 'width=600,height=700');
-    } catch (error) {
-      console.error('Error getting Google auth URL:', error);
-      alert('Error de red al intentar conectar con Google');
-    }
-  };
-
-  const handleDisconnectGoogle = async () => {
-    try {
-      await fetch('/api/auth/google/logout', { method: 'POST' });
-      setIsGoogleConnected(false);
-    } catch (error) {
-      console.error('Error logging out of Google:', error);
-    }
-  };
-
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
-        setIsGoogleConnected(true);
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
   const handleSubmit = async (formData: Omit<FinalDispositionRecord, 'id' | 'createdAt' | 'uid' | 'userEmail'>) => {
     if (!user) return;
     setIsSyncing(true);
     try {
-      let savedRecord: FinalDispositionRecord;
       if (editingRecord) {
         const updateData = {
-          ...editingRecord,
           ...formData,
           updatedAt: new Date().toISOString(),
           updatedBy: user.email || 'Desconocido'
         };
-        savedRecord = await dataService.saveRecord<any>('finalDisposition', updateData) as FinalDispositionRecord;
+        await updateDoc(doc(db, 'finalDisposition', editingRecord.id!), updateData);
         setEditingRecord(null);
       } else {
         const fullRecord = {
@@ -147,25 +124,20 @@ export const DisposicionApp: React.FC = () => {
           userEmail: user.email || 'Desconocido'
         };
 
-        savedRecord = await dataService.saveRecord<any>('finalDisposition', fullRecord) as FinalDispositionRecord;
+        await addDoc(collection(db, 'finalDisposition'), fullRecord);
         
         if (isGoogleConnected) {
           await fetch('/api/sync/sheets/disposicion', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ record: savedRecord }),
+            body: JSON.stringify(fullRecord),
           });
         }
       }
       
-      // Refresh local state
-      const updatedRecords = await dataService.getRecords<FinalDispositionRecord>('finalDisposition');
-      setRecords(updatedRecords);
-      
       setShowForm(false);
     } catch (error) {
-      console.error('Error saving record:', error);
-      alert('Error al guardar el registro.');
+      handleFirestoreError(error, editingRecord ? OperationType.UPDATE : OperationType.CREATE, 'finalDisposition');
     } finally {
       setIsSyncing(false);
     }
@@ -179,17 +151,11 @@ export const DisposicionApp: React.FC = () => {
   const confirmDelete = async () => {
     if (recordToDelete) {
       try {
-        await dataService.deleteRecord('finalDisposition', recordToDelete);
-        
-        // Refresh local state
-        const updatedRecords = await dataService.getRecords<FinalDispositionRecord>('finalDisposition');
-        setRecords(updatedRecords);
-        
+        await deleteDoc(doc(db, 'finalDisposition', recordToDelete));
         setRecordToDelete(null);
         setShowDeleteConfirm(false);
       } catch (error) {
-        console.error('Error deleting record:', error);
-        alert('Error al eliminar el registro.');
+        handleFirestoreError(error, OperationType.DELETE, `finalDisposition/${recordToDelete}`);
       }
     }
   };
