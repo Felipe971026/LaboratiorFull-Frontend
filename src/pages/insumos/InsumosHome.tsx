@@ -142,6 +142,15 @@ export const InsumosHome: React.FC = () => {
             >
               Cancelar y Cerrar Sesión
             </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="mt-8 text-zinc-400 hover:text-zinc-900 text-sm font-bold flex items-center justify-center gap-2 mx-auto transition-colors"
+            >
+              <ArrowLeft size={16} />
+              Volver al menú principal
+            </button>
           </form>
         </div>
       </div>
