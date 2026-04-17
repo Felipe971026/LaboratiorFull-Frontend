@@ -1,8 +1,10 @@
+
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { Droplets, FlaskConical, Package, ArrowRight, Settings, LogOut, LogIn, Lock, ShieldAlert } from 'lucide-react';
 import { auth, logout, loginWithGoogle, db } from '../firebase';
+import { getNowISO } from '../utils/dateUtils';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
@@ -23,7 +25,7 @@ export const MainHome: React.FC = () => {
             email: u.email,
             displayName: u.displayName,
             photoURL: u.photoURL,
-            lastLogin: new Date().toISOString(),
+            lastLogin: getNowISO(),
             uid: u.uid
           }, { merge: true });
         } catch (e) {
