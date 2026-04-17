@@ -1,6 +1,8 @@
+
 import React, { useState } from 'react';
 import { ReceivedUnitRecord } from '../types';
 import { Save, AlertCircle, Plus, Trash2, ChevronDown, ChevronUp, Layers, CheckCircle } from 'lucide-react';
+import { getColombiaDateString, getColombiaTimeShort } from '../../../utils/dateUtils';
 
 interface RecepcionFormProps {
   onSubmit: (records: Omit<ReceivedUnitRecord, 'id' | 'createdAt' | 'uid' | 'userEmail'>[]) => Promise<void>;
@@ -27,8 +29,8 @@ export const RecepcionForm: React.FC<RecepcionFormProps> = ({ onSubmit, isSubmit
   ].sort((a, b) => a.localeCompare(b));
 
   const [generalInfo, setGeneralInfo] = useState({
-    receptionDate: initialData?.receptionDate || new Date().toISOString().split('T')[0],
-    receptionTime: initialData?.receptionTime || new Date().toTimeString().slice(0, 5),
+    receptionDate: initialData?.receptionDate || getColombiaDateString(),
+    receptionTime: initialData?.receptionTime || getColombiaTimeShort(),
     provider: initialData?.provider || '' as ReceivedUnitRecord['provider'],
     receiverName: initialData?.receiverName || '',
     supervisorName: initialData?.supervisorName || '',
@@ -210,9 +212,9 @@ export const RecepcionForm: React.FC<RecepcionFormProps> = ({ onSubmit, isSubmit
       await onSubmit(recordsToSubmit);
       // Reset form
       setGeneralInfo({
-        receptionDate: new Date().toISOString().split('T')[0],
-        receptionTime: new Date().toTimeString().slice(0, 5),
-        provider: '',
+        receptionDate: getColombiaDateString(),
+        receptionTime: getColombiaTimeShort(),
+        provider: '' as ReceivedUnitRecord['provider'],
         receiverName: '',
         supervisorName: '',
       });
