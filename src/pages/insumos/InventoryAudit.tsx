@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -18,6 +19,7 @@ import {
   orderBy 
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../../firebase';
+import { formatColombia } from '../../utils/dateUtils';
 
 interface KardexEntry {
   id: string;
@@ -160,13 +162,13 @@ export const InventoryAudit: React.FC = () => {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2 text-zinc-600 font-medium whitespace-nowrap">
                           <Calendar size={14} className="text-zinc-400" />
-                          {entry.date?.toDate ? entry.date.toDate().toLocaleString() : 'Pendiente...'}
+                          {entry.date ? formatColombia(entry.date) : 'Pendiente...'}
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2 text-zinc-400 text-xs whitespace-nowrap">
                           <Calendar size={12} className="text-zinc-300" />
-                          {entry.createdAt?.toDate ? entry.createdAt.toDate().toLocaleString() : 'Pendiente...'}
+                          {entry.createdAt ? formatColombia(entry.createdAt) : 'Pendiente...'}
                         </div>
                       </td>
                       <td className="px-6 py-4">
