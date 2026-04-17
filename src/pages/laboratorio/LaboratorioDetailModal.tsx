@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { X, Download, FileText, Trash2, Edit2, Save } from 'lucide-react';
 import { LabResultData, LabParameter } from './types';
 import { generatePdf, generateJson } from './services/pdfService';
-import { format } from 'date-fns';
+import { formatColombia } from '../../utils/dateUtils';
 import { PROFESSIONALS } from '../../constants';
 
 interface Props {
@@ -39,7 +40,7 @@ export const LaboratorioDetailModal: React.FC<Props> = ({ result, onClose, onDel
               {isEditing ? 'Editar Resultado' : 'Detalle de Resultado'}
             </h2>
             <p className="text-slate-500 text-sm mt-1">
-              {format(new Date(result.date), 'dd/MM/yyyy HH:mm')}
+              {formatColombia(result.date)}
             </p>
           </div>
           <div className="flex items-center gap-2">
