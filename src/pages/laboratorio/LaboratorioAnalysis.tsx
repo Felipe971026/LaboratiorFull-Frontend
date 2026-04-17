@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { UploadCloud, X, Activity, FileText, Download, Plus, Trash2, Save, Info, RefreshCw, FileSearch, Sparkles } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -7,6 +8,7 @@ import { convertPdfToImage } from './services/pdfConverter';
 import { compressImage } from './services/imageUtils';
 import { LabResultData, LabParameter } from './types';
 import { PROFESSIONALS } from '../../constants';
+import { getNowISO } from '../../utils/dateUtils';
 
 const PARAMETER_ORDER = [
   'WBC', 'Lymph#', 'Mid#', 'Gran#', 'Lymph%', 'Mid%', 'Gran%', 
@@ -17,6 +19,7 @@ const PARAMETER_ORDER = [
 export const LaboratorioAnalysis: React.FC = () => {
   const [id, setId] = useState<string | null>(null);
   const [patientName, setPatientName] = useState('');
+  const [solicitudNumber, setSolicitudNumber] = useState('');
   const [clinicalHistoryNumber, setClinicalHistoryNumber] = useState('');
   const [age, setAge] = useState('');
   const [eps, setEps] = useState('');
@@ -89,16 +92,21 @@ export const LaboratorioAnalysis: React.FC = () => {
   };
 
   const analyzeDocument = async (base64Data: string, type: string) => {
-    if (!process.env.GEMINI_API_KEY) {
-      setError('La clave de API de Gemini no está configurada. Por favor, contacte al administrador o complete los datos manualmente.');
+    const apiKeys = [
+      process.env.GEMINI_API_KEY_1,
+      process.env.GEMINI_API_KEY_2,
+      process.env.GEMINI_API_KEY_3,
+      process.env.GEMINI_API_KEY // Fallback
+    ].filter(Boolean) as string[];
+
+    if (apiKeys.length === 0) {
+      setError('No se han configurado claves de API de Gemini. Por favor, contacte al administrador o complete los datos manualmente.');
       setMode('edit');
       return;
     }
     
     setIsAnalyzing(true);
     setError(null);
-
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
     // List of models to try in order of preference (Free/Preview models)
     const modelsToTry = [
@@ -110,126 +118,155 @@ export const LaboratorioAnalysis: React.FC = () => {
     let lastError = null;
     let success = false;
 
-    for (const modelName of modelsToTry) {
+    // Outer loop for API Keys
+    for (let keyIndex = 0; keyIndex < apiKeys.length; keyIndex++) {
       if (success) break;
 
-      let retries = 2; // Number of retries per model for transient errors
-      while (retries >= 0 && !success) {
-        try {
-          console.log(`Intentando análisis con modelo: ${modelName} (Intentos restantes: ${retries})`);
-          
-          const response = await ai.models.generateContent({
-            model: modelName,
-            contents: [
-              {
-                parts: [
-                  {
-                    text: "Analiza este informe de laboratorio y extrae la información solicitada en el formato JSON definido."
-                    
+      const currentKey = apiKeys[keyIndex];
+      const ai = new GoogleGenAI({ apiKey: currentKey });
+      console.log(`%c>>> INICIANDO ANÁLISIS CON API KEY #${keyIndex + 1} <<<`, 'color: #2563eb; font-weight: bold; font-size: 12px;');
 
-                  },
-                  {
-                    inlineData: {
-                      data: base64Data,
-                      mimeType: type
+      // Inner loop for Models
+      for (const modelName of modelsToTry) {
+        if (success) break;
+
+        let retries = 2; // Number of retries per model for transient errors
+        while (retries >= 0 && !success) {
+          try {
+            console.log(`Intentando análisis con modelo: ${modelName} (Intentos restantes: ${retries})`);
+            
+            const response = await ai.models.generateContent({
+              model: modelName,
+              contents: [
+                {
+                  parts: [
+                    {
+                      text: "Analiza este informe de laboratorio y extrae la información solicitada en el formato JSON definido."
+                    },
+                    {
+                      inlineData: {
+                        data: base64Data,
+                        mimeType: type
+                      }
                     }
+                  ]
+                }
+              ],
+              config: {
+                systemInstruction: `Eres un experto en análisis de documentos médicos de laboratorio. 
+                Tu tarea es extraer datos de informes de laboratorio de forma extremadamente precisa y concisa.
+                
+                REGLA DE ORO PARA EL NOMBRE DEL PACIENTE:
+                - Busca el nombre del paciente, usualmente precedido por "Paciente:", "Nombre:", "Usuario:".
+                - IGNORA nombres de médicos, bacteriólogos o directores que suelen aparecer en el encabezado o pie de página (ej. Dra. Patricia Gómez, Dra. Felisa Lozano, etc.).
+                - El nombre del paciente suele estar en una sección de "Datos del Paciente" o "Información General".
+                - Si no estás 100% seguro, deja el campo vacío en lugar de inventar o usar el nombre de un médico.
+                
+                EXTRAE ESTOS 22 PARÁMETROS ESPECÍFICOS (si están presentes):
+                WBC, Lymph#, Mid#, Gran#, Lymph%, Mid%, Gran%, HGB, RBC, HCT, MCV, MCH, MCHC, RDW-CV, RDW-SD, PLT, MPV, PDW, PCT, UREA, CREAT, BUN.
+                
+                Usa estos rangos de referencia si el documento no los tiene:
+                WBC: 4.0-10.0, Lymph#: 0.8-4.0, Mid#: 0.1-1.5, Gran#: 2.0-7.0, Lymph%: 20.0-40.0, Mid%: 3.0-15.0, Gran%: 50.0-70.0, HGB: 11.0-16.0, RBC: 3.50-5.50, HCT: 37.0-54.0, MCV: 80.0-100.0, MCH: 27.0-34.0, MCHC: 30.0-36.0, RDW-CV: 11.0-16.0, RDW-SD: 35.0-56.0, PLT: 150-450, MPV: 6.5-12.0, PDW: 9.0-17.0, PCT: 0.108-0.282, BUN: 7-20.
+                
+                Para UREA, CREAT y BUN, busca rangos de adultos en el documento.
+                
+                REGLA ESPECIAL PARA BUN: Si el documento tiene UREA pero no BUN, puedes calcular BUN como UREA / 2.14.
+                
+                REGLAS CRÍTICAS:
+                1. Solo devuelve el JSON. No incluyas explicaciones ni comentarios fuera del JSON.
+                2. Sé extremadamente breve en los campos de texto.
+                3. No inventes datos que no estén en la imagen.
+                4. Si ves una edad como '21A' o '85A', transcríbela como '21 años' o '85 años'.`,
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    patientName: { type: Type.STRING, description: "Nombre completo en MAYÚSCULAS" },
+                    solicitudNumber: { type: Type.STRING, description: "Número de solicitud o pedido" },
+                    clinicalHistoryNumber: { type: Type.STRING, description: "ID, Cédula o Historia Clínica" },
+                    age: { type: Type.STRING, description: "Edad formateada como 'X años'" },
+                    eps: { type: Type.STRING },
+                    studyType: { type: Type.STRING, description: "Nombre del estudio (ej. Hemograma)" },
+                    parameters: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          name: { type: Type.STRING, description: "Nombre corto del parámetro (ej. WBC)" },
+                          value: { type: Type.STRING, description: "Valor numérico" },
+                          unit: { type: Type.STRING },
+                          referenceRange: { type: Type.STRING },
+                          status: { type: Type.STRING, enum: ['Normal', 'Alto', 'Bajo'] },
+                          analysis: { type: Type.STRING, description: "Comentario técnico BREVE (máx 5 palabras)" }
+                        },
+                        required: ['name', 'value']
+                      }
+                    },
+                    generalAnalysis: { type: Type.STRING, description: "Resumen clínico global MUY BREVE (máx 30 palabras)" }
                   }
-                ]
-              }
-            ],
-            config: {
-              systemInstruction: `Eres un experto en análisis de documentos médicos de laboratorio. 
-              Tu tarea es extraer datos de informes de laboratorio de forma extremadamente precisa y concisa.
-              
-              EXTRAE ESTOS 22 PARÁMETROS ESPECÍFICOS (si están presentes):
-              WBC, Lymph#, Mid#, Gran#, Lymph%, Mid%, Gran%, HGB, RBC, HCT, MCV, MCH, MCHC, RDW-CV, RDW-SD, PLT, MPV, PDW, PCT, UREA, CREAT, BUN.
-              
-              Usa estos rangos de referencia si el documento no los tiene:
-              WBC: 4.0-10.0, Lymph#: 0.8-4.0, Mid#: 0.1-1.5, Gran#: 2.0-7.0, Lymph%: 20.0-40.0, Mid%: 3.0-15.0, Gran%: 50.0-70.0, HGB: 11.0-16.0, RBC: 3.50-5.50, HCT: 37.0-54.0, MCV: 80.0-100.0, MCH: 27.0-34.0, MCHC: 30.0-36.0, RDW-CV: 11.0-16.0, RDW-SD: 35.0-56.0, PLT: 150-450, MPV: 6.5-12.0, PDW: 9.0-17.0, PCT: 0.108-0.282, BUN: 7-20.
-              
-              Para UREA, CREAT y BUN, busca rangos de adultos en el documento.
-              
-              REGLA ESPECIAL PARA BUN: Si el documento tiene UREA pero no BUN, puedes calcular BUN como UREA / 2.14.
-              
-              REGLAS CRÍTICAS:
-              1. Solo devuelve el JSON. No incluyas explicaciones ni comentarios fuera del JSON.
-              2. Sé extremadamente breve en los campos de texto.
-              3. No inventes datos que no estén en la imagen.`,
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  patientName: { type: Type.STRING, description: "Nombre completo en MAYÚSCULAS" },
-                  clinicalHistoryNumber: { type: Type.STRING, description: "ID, Cédula o Historia Clínica" },
-                  age: { type: Type.STRING },
-                  eps: { type: Type.STRING },
-                  studyType: { type: Type.STRING, description: "Nombre del estudio (ej. Hemograma)" },
-                  parameters: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        name: { type: Type.STRING, description: "Nombre corto del parámetro (ej. WBC)" },
-                        value: { type: Type.STRING, description: "Valor numérico" },
-                        unit: { type: Type.STRING },
-                        referenceRange: { type: Type.STRING },
-                        status: { type: Type.STRING, enum: ['Normal', 'Alto', 'Bajo'] },
-                        analysis: { type: Type.STRING, description: "Comentario técnico BREVE (máx 5 palabras)" }
-                      },
-                      required: ['name', 'value']
-                    }
-                  },
-                  generalAnalysis: { type: Type.STRING, description: "Resumen clínico global MUY BREVE (máx 30 palabras)" }
                 }
               }
+            });
+
+            let result;
+            const responseText = response.text || '';
+            try {
+              result = JSON.parse(responseText || '{}');
+            } catch (e) {
+              console.error('Error parsing AI response:', e);
+              result = {};
+              throw new Error('La respuesta de la IA fue malformada. Reintentando...');
             }
-          });
+            
+            if (result.patientName && !patientName) setPatientName(result.patientName);
+            if (result.solicitudNumber && !solicitudNumber) setSolicitudNumber(result.solicitudNumber);
+            if (result.clinicalHistoryNumber && !clinicalHistoryNumber) setClinicalHistoryNumber(result.clinicalHistoryNumber);
+            
+            if (result.age && !age) {
+              let formattedAge = result.age;
+              if (formattedAge.toUpperCase().endsWith('A')) {
+                formattedAge = formattedAge.substring(0, formattedAge.length - 1) + ' años';
+              }
+              setAge(formattedAge);
+            }
+            if (result.eps && !eps) setEps(result.eps);
+            if (result.studyType && !studyType) setStudyType(result.studyType);
+            
+            if (result.parameters?.length > 0) {
+              setParameters(sortParameters(result.parameters));
+            }
+            setGeneralAnalysis(result.generalAnalysis || '');
+            setMode('edit');
+            success = true;
+            console.log(`%cAnálisis exitoso con modelo: ${modelName} y API Key #${keyIndex + 1}`, 'color: #16a34a; font-weight: bold;');
 
-          let result;
-          const responseText = response.text || '';
-          try {
-            result = JSON.parse(responseText || '{}');
-          } catch (e) {
-            console.error('Error parsing AI response:', e);
-            console.log('Longitud de respuesta:', responseText.length);
-            console.log('Inicio de respuesta:', responseText.substring(0, 200));
-            console.log('Fin de respuesta:', responseText.substring(responseText.length - 200));
-            result = {};
-            throw new Error('La respuesta de la IA fue malformada. Reintentando...');
-          }
-          
-          if (result.patientName && !patientName) setPatientName(result.patientName);
-          if (result.clinicalHistoryNumber && !clinicalHistoryNumber) setClinicalHistoryNumber(result.clinicalHistoryNumber);
-          if (result.age && !age) setAge(result.age);
-          if (result.eps && !eps) setEps(result.eps);
-          if (result.studyType && !studyType) setStudyType(result.studyType);
-          
-          if (result.parameters?.length > 0) {
-            setParameters(sortParameters(result.parameters));
-          }
-          setGeneralAnalysis(result.generalAnalysis || '');
-          setMode('edit');
-          success = true;
-          console.log(`Análisis exitoso con modelo: ${modelName}`);
+          } catch (err: any) {
+            lastError = err;
+            const errorMessage = err?.message || String(err);
+            
+            // Check if it's a transient error (503, 429, or "busy")
+            const isTransient = errorMessage.includes('503') || 
+                               errorMessage.includes('429') || 
+                               errorMessage.toLowerCase().includes('busy') ||
+                               errorMessage.toLowerCase().includes('overloaded') ||
+                               errorMessage.toLowerCase().includes('deadline');
 
-        } catch (err: any) {
-          lastError = err;
-          const errorMessage = err?.message || String(err);
-          
-          // Check if it's a transient error (503, 429, or "busy")
-          const isTransient = errorMessage.includes('503') || 
-                             errorMessage.includes('429') || 
-                             errorMessage.toLowerCase().includes('busy') ||
-                             errorMessage.toLowerCase().includes('overloaded') ||
-                             errorMessage.toLowerCase().includes('deadline');
+            // Check if it's a quota error or leaked key error (403, 429)
+            const isQuotaOrLeaked = errorMessage.includes('429') || errorMessage.includes('403');
 
-          if (isTransient && retries > 0) {
-            console.warn(`Error transitorio en ${modelName}, reintentando en 2s...`, errorMessage);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            retries--;
-          } else {
-            console.error(`Error crítico o sin reintentos en ${modelName}:`, errorMessage);
-            break; // Try next model
+            if (isQuotaOrLeaked) {
+              console.warn(`%cAPI Key #${keyIndex + 1} reportó error de cuota o filtración. Saltando a la siguiente clave...`, 'color: #d97706; font-weight: bold;');
+              break; // Break the model loop to try the next key
+            }
+
+            if (isTransient && retries > 0) {
+              console.warn(`Error transitorio en ${modelName}, reintentando en 2s...`, errorMessage);
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              retries--;
+            } else {
+              console.error(`Error crítico en ${modelName} con Key #${keyIndex + 1}:`, errorMessage);
+              break; // Try next model
+            }
           }
         }
       }
@@ -340,8 +377,9 @@ export const LaboratorioAnalysis: React.FC = () => {
       
       const resultData: LabResultData = {
         id: currentId,
-        date: new Date().toISOString(),
+        date: getNowISO(),
         patientName,
+        solicitudNumber,
         clinicalHistoryNumber,
         age,
         eps,
@@ -379,6 +417,7 @@ export const LaboratorioAnalysis: React.FC = () => {
   const resetForm = () => {
     setId(null);
     setPatientName('');
+    setSolicitudNumber('');
     setClinicalHistoryNumber('');
     setAge('');
     setEps('');
@@ -404,8 +443,9 @@ export const LaboratorioAnalysis: React.FC = () => {
     const selectedProfessional = PROFESSIONALS.find(p => p.name === bacteriologist) || PROFESSIONALS[0];
     const previewData: LabResultData = {
       id: 'preview',
-      date: new Date().toISOString(),
+      date: getNowISO(),
       patientName,
+      solicitudNumber,
       clinicalHistoryNumber,
       age,
       eps,
@@ -473,13 +513,23 @@ export const LaboratorioAnalysis: React.FC = () => {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Nombre Completo</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Nombre Completo del Paciente</label>
                 <input 
                   type="text" 
                   value={patientName}
                   onChange={handlePatientNameChange}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+                  className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white transition-all"
                   placeholder="NOMBRE COMPLETO"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Solicitud</label>
+                <input 
+                  type="text" 
+                  value={solicitudNumber}
+                  onChange={(e) => setSolicitudNumber(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+                  placeholder="Número de Solicitud"
                 />
               </div>
               <div>
@@ -493,16 +543,6 @@ export const LaboratorioAnalysis: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Edad</label>
-                <input 
-                  type="text" 
-                  value={age}
-                  onChange={(e) => setAge(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
-                  placeholder="Ej. 30 años"
-                />
-              </div>
-              <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">EPS</label>
                 <input 
                   type="text" 
@@ -512,7 +552,17 @@ export const LaboratorioAnalysis: React.FC = () => {
                   placeholder="Nombre de EPS"
                 />
               </div>
-              <div className="md:col-span-2 lg:col-span-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Edad</label>
+                <input 
+                  type="text" 
+                  value={age}
+                  onChange={(e) => setAge(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+                  placeholder="Ej. 30 años"
+                />
+              </div>
+              <div className="md:col-span-2 lg:col-span-3">
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Tipo de Estudio</label>
                 <input 
                   type="text" 
@@ -629,16 +679,26 @@ export const LaboratorioAnalysis: React.FC = () => {
                 <Info className="text-brand-600" size={20} />
                 Información del Paciente
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Nombre del Paciente *</label>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Nombre Completo del Paciente</label>
                   <input 
                     type="text" 
                     value={patientName}
                     onChange={handlePatientNameChange}
-                    required
-                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+                    className="w-full px-4 py-2 border border-brand-300 ring-2 ring-brand-100 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white transition-all"
                     placeholder="NOMBRE COMPLETO"
+                  />
+                  <p className="text-[10px] text-brand-600 font-bold mt-1 uppercase">Verifica que este nombre coincida con el documento</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Solicitud</label>
+                  <input 
+                    type="text" 
+                    value={solicitudNumber}
+                    onChange={(e) => setSolicitudNumber(e.target.value)}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+                    placeholder="Número de Solicitud"
                   />
                 </div>
                 <div>
@@ -652,16 +712,6 @@ export const LaboratorioAnalysis: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Edad</label>
-                  <input 
-                    type="text" 
-                    value={age}
-                    onChange={(e) => setAge(e.target.value)}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
-                    placeholder="Ej. 30 años"
-                  />
-                </div>
-                <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">EPS</label>
                   <input 
                     type="text" 
@@ -672,6 +722,16 @@ export const LaboratorioAnalysis: React.FC = () => {
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Edad</label>
+                  <input 
+                    type="text" 
+                    value={age}
+                    onChange={(e) => setAge(e.target.value)}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+                    placeholder="Ej. 30 años"
+                  />
+                </div>
+                <div className="md:col-span-2 lg:col-span-3">
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Tipo de Estudio</label>
                   <input 
                     type="text" 
