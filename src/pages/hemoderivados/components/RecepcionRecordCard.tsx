@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { ReceivedUnitRecord } from '../types';
 import { Package, Calendar, Droplets, CheckCircle, XCircle, Trash2, User, Eye, X, Thermometer, Info, ClipboardCheck, UserCheck, Edit2, AlertTriangle } from 'lucide-react';
@@ -21,7 +22,11 @@ export const RecepcionRecordCard: React.FC<RecepcionRecordCardProps> = ({ record
   const canEdit = isAdmin;
 
   return (
-    <div className="bg-white rounded-3xl p-6 shadow-sm border border-zinc-100 hover:shadow-md transition-shadow relative">
+    <div className={`rounded-3xl p-6 shadow-sm border border-zinc-100 hover:shadow-md transition-shadow relative ${
+      isUsed ? 'bg-red-50/50' : 
+      isReserved ? 'bg-amber-50/50' : 
+      'bg-white'
+    }`}>
       <div className="absolute top-6 right-6 flex items-center gap-2">
         <button
           onClick={() => setShowDetails(true)}
