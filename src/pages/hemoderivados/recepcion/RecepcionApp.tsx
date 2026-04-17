@@ -16,6 +16,7 @@ export const RecepcionApp: React.FC = () => {
   const [records, setRecords] = useState<ReceivedUnitRecord[]>([]);
   const [transfusionRecords, setTransfusionRecords] = useState<any[]>([]);
   const [dispositionRecords, setDispositionRecords] = useState<any[]>([]);
+  const [bloodTestRecords, setBloodTestRecords] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingRecord, setEditingRecord] = useState<ReceivedUnitRecord | null>(null);
   const [filter, setFilter] = useState<'all' | 'available' | 'used'>('all');
@@ -128,10 +129,22 @@ export const RecepcionApp: React.FC = () => {
       console.error('Error fetching disposition records for availability:', error);
     });
 
+    const bloodTestQuery = query(collection(db, 'bloodTestRecords'));
+    const unsubscribeBloodTest = onSnapshot(bloodTestQuery, (snapshot) => {
+      const data: any[] = [];
+      snapshot.forEach((doc) => {
+        data.push({ id: doc.id, ...doc.data() });
+      });
+      setBloodTestRecords(data);
+    }, (error) => {
+      console.error('Error fetching blood test records for availability:', error);
+    });
+
     return () => {
       unsubscribe();
       unsubscribeTransfusion();
       unsubscribeDisposition();
+      unsubscribeBloodTest();
     };
   }, [isAuthReady, user, isSystemUnlocked]);
 
@@ -283,8 +296,17 @@ export const RecepcionApp: React.FC = () => {
   };
 
   const filteredRecords = records.filter(record => {
-    const isUsed = transfusionRecords.some(t => t.unitId === record.unitId || t.qualitySeal === record.qualitySeal) ||
-                   dispositionRecords.some(d => d.unitId === record.unitId || d.qualitySeal === record.qualitySeal);
+    const isTransfused = transfusionRecords.some(t => t.unitId === record.unitId || t.qualitySeal === record.qualitySeal) ||
+                        dispositionRecords.some(d => d.unitId === record.unitId || d.qualitySeal === record.qualitySeal);
+    
+    // An active cross-match blocks the unit too
+    const hasActiveCrossmatch = bloodTestRecords.some(r => 
+      (r.unitId === record.unitId || r.qualitySeal === record.qualitySeal) && 
+      r.acceptedBy && 
+      !r.returned
+    );
+    
+    const isUsed = isTransfused || hasActiveCrossmatch;
     
     if (filter === 'available') return !isUsed;
     if (filter === 'used') return isUsed;
@@ -516,8 +538,17 @@ export const RecepcionApp: React.FC = () => {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredRecords.map((record) => {
-                      const isUsed = transfusionRecords.some(t => t.unitId === record.unitId || t.qualitySeal === record.qualitySeal) ||
-                                     dispositionRecords.some(d => d.unitId === record.unitId || d.qualitySeal === record.qualitySeal);
+                      const isTransfused = transfusionRecords.some(t => t.unitId === record.unitId || t.qualitySeal === record.qualitySeal) ||
+                                          dispositionRecords.some(d => d.unitId === record.unitId || d.qualitySeal === record.qualitySeal);
+                      
+                      const hasActiveCrossmatch = bloodTestRecords.some(r => 
+                        (r.unitId === record.unitId || r.qualitySeal === record.qualitySeal) && 
+                        r.acceptedBy && 
+                        !r.returned
+                      );
+
+                      const isUsed = isTransfused || hasActiveCrossmatch;
+
                       return (
                         <RecepcionRecordCard
                           key={record.id}
