@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 interface RecepcionRecordCardProps {
   record: ReceivedUnitRecord;
   isUsed?: boolean;
+  isReserved?: boolean;
   onDelete: (id: string) => void;
   onEdit?: (record: ReceivedUnitRecord) => void;
   onReclassify?: (record: ReceivedUnitRecord) => void;
@@ -13,7 +14,7 @@ interface RecepcionRecordCardProps {
   isAdmin?: boolean;
 }
 
-export const RecepcionRecordCard: React.FC<RecepcionRecordCardProps> = ({ record, isUsed, onDelete, onEdit, onReclassify, currentUserUid, isAdmin }) => {
+export const RecepcionRecordCard: React.FC<RecepcionRecordCardProps> = ({ record, isUsed, isReserved, onDelete, onEdit, onReclassify, currentUserUid, isAdmin }) => {
   const [showDetails, setShowDetails] = useState(false);
   const isOwner = currentUserUid === record.uid;
   const canDelete = isAdmin;
@@ -92,8 +93,12 @@ export const RecepcionRecordCard: React.FC<RecepcionRecordCardProps> = ({ record
               </span>
             )}
             {record.accepted === 'Sí' && (
-              <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${isUsed ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                {isUsed ? 'Utilizada' : 'Disponible'}
+              <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                isUsed ? 'bg-blue-100 text-blue-700' : 
+                isReserved ? 'bg-orange-100 text-orange-700' : 
+                'bg-green-100 text-green-700'
+              }`}>
+                {isUsed ? 'Utilizada' : isReserved ? 'Reservada' : 'Disponible'}
               </span>
             )}
             {record.accepted === 'Sí' ? (
