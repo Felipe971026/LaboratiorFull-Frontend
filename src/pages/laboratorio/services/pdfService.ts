@@ -63,7 +63,7 @@ export const generatePdf = async (result: LabResultData) => {
   };
 
   drawInfoLine('Solicitud', result.solicitudNumber || result.id.substring(0, 8).toUpperCase(), leftColX, currentY);
-  drawInfoLine('Fecha Recepción', formatColombia(result.date), rightColX, currentY);
+  drawInfoLine('Fecha Recepción', result.receptionDate ? formatColombia(result.receptionDate).split(' ')[0] : formatColombia(result.date), rightColX, currentY);
   currentY += 4;
 
   drawInfoLine('Paciente', result.patientName.toUpperCase(), leftColX, currentY);
@@ -71,7 +71,7 @@ export const generatePdf = async (result: LabResultData) => {
   currentY += 4;
 
   drawInfoLine('Identificación', result.clinicalHistoryNumber || 'N/A', leftColX, currentY);
-  drawInfoLine('Fecha Toma Muestra', formatColombia(result.date).split(' ')[0], rightColX, currentY);
+  drawInfoLine('Fecha Toma Muestra', result.sampleDate ? formatColombia(result.sampleDate).split(' ')[0] : formatColombia(result.date).split(' ')[0], rightColX, currentY);
   currentY += 4;
 
   drawInfoLine('EPS', result.eps || 'PARTICULAR', leftColX, currentY);
