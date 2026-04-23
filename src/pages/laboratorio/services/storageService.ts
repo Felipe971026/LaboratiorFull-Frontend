@@ -82,3 +82,15 @@ export async function clearAllResults(): Promise<void> {
     await deleteResult(result.id);
   }
 }
+
+export async function deleteResultsForPatient(results: LabResultData[]): Promise<void> {
+  if (typeof window === 'undefined' || !auth.currentUser) {
+    return;
+  }
+  try {
+    const deletePromises = results.map(r => deleteResult(r.id));
+    await Promise.all(deletePromises);
+  } catch (e) {
+    console.error('Error deleting results for patient:', e);
+  }
+}
