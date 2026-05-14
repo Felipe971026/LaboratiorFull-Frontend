@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, X, Activity, FileText, Download, Plus, Trash2, Save, Info, RefreshCw, FileSearch, Sparkles } from 'lucide-react';
+import { UploadCloud, X, Activity, FileText, Download, Plus, Trash2, Save, Info, RefreshCw, FileSearch, Sparkles, ShieldCheck } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { saveResult } from './services/storageService';
 import { generatePdf, generateJson } from './services/pdfService';
@@ -560,7 +560,7 @@ export const LaboratorioAnalysis: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-3">
           <Activity className="text-brand-600" />
@@ -582,30 +582,363 @@ export const LaboratorioAnalysis: React.FC = () => {
         )}
       </div>
 
-      {mode === 'edit' && (
-        <div className="mb-8 bg-amber-50 border border-amber-200 p-6 rounded-2xl flex items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500">
-          <div className="flex items-center gap-4">
-            <div className="bg-amber-100 text-amber-600 p-3 rounded-xl shadow-sm">
-              <Info size={24} />
+      {mode === 'edit' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="lg:col-span-8 space-y-8">
+            <div className="bg-amber-50 border border-amber-200 p-8 rounded-[2.5rem] shadow-sm">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="bg-white/60 p-4 rounded-2xl border border-amber-200/50 flex items-center justify-between flex-1 gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 bg-brand-500 rounded-full animate-pulse"></div>
+                    <p className="text-sm font-bold text-brand-700 uppercase tracking-tight">Valide información digitalizada y análisis clínico</p>
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-1 bg-brand-600 text-white rounded-lg text-[10px] font-black tracking-widest shadow-lg shadow-brand-200">
+                    <Sparkles size={12} />
+                    PROCESADO CON IA
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-amber-800 font-medium leading-relaxed italic opacity-80">
+                Por favor, verifique que los valores extraídos por la IA coincidan con el documento original antes de guardar.
+              </p>
             </div>
-            <div>
-              <h3 className="font-bold text-amber-900">Validación de Datos</h3>
-              <p className="text-sm text-amber-700 font-medium">Por favor, verifica que la información extraída por la IA sea correcta. Puedes editar cualquier campo si es necesario.</p>
+
+            <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 p-8">
+              <form onSubmit={handleSave} className="space-y-8">
+                {/* Patient Info Section */}
+                <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
+              <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <Info className="text-brand-600" size={20} />
+                Información del Paciente
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Nombre Completo del Paciente</label>
+                  <input 
+                    type="text" 
+                    value={patientName}
+                    onChange={handlePatientNameChange}
+                    className="w-full px-4 py-2 border border-brand-300 ring-2 ring-brand-100 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white transition-all"
+                    placeholder="NOMBRE COMPLETO"
+                  />
+                  <p className="text-[10px] text-brand-600 font-bold mt-1 uppercase">Verifica que este nombre coincida con el documento</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Solicitud</label>
+                  <input 
+                    type="text" 
+                    value={solicitudNumber}
+                    onChange={(e) => setSolicitudNumber(e.target.value)}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+                    placeholder="Número de Solicitud"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Identificación</label>
+                  <input 
+                    type="text" 
+                    value={clinicalHistoryNumber}
+                    onChange={(e) => setClinicalHistoryNumber(e.target.value)}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+                    placeholder="C.C. / H.C."
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">EPS</label>
+                  <input 
+                    type="text" 
+                    value={eps}
+                    onChange={(e) => setEps(e.target.value)}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+                    placeholder="Nombre de EPS"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Edad</label>
+                  <input 
+                    type="text" 
+                    value={age}
+                    onChange={(e) => setAge(e.target.value)}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+                    placeholder="Ej. 30 años"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Fecha Recepción</label>
+                  <input 
+                    type="date" 
+                    value={receptionDate}
+                    onChange={(e) => setReceptionDate(e.target.value)}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Fecha Toma Muestra</label>
+                  <input 
+                    type="date" 
+                    value={sampleDate}
+                    onChange={(e) => setSampleDate(e.target.value)}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+                  />
+                </div>
+                <div className="md:col-span-2 lg:col-span-2">
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Tipo de Estudio</label>
+                  <input 
+                    type="text" 
+                    value={studyType}
+                    onChange={(e) => setStudyType(e.target.value)}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+                    placeholder="Ej. Cuadro Hemático"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="hidden md:block">
-            <div className="flex items-center gap-2 px-4 py-2 bg-white border border-amber-200 rounded-xl text-amber-600 text-xs font-bold shadow-sm">
-              <Sparkles size={14} />
-              ANÁLISIS IA COMPLETADO
+
+            <div className="border-t border-slate-100 pt-6">
+              <div className="flex items-center justify-between mb-4">
+                <label className="block text-lg font-bold text-slate-800">Parámetros del Laboratorio</label>
+                <button 
+                  type="button"
+                  onClick={addParameter}
+                  className="flex items-center gap-2 text-brand-600 font-bold hover:bg-brand-50 px-4 py-2 rounded-xl transition-all"
+                >
+                  <Plus size={20} />
+                  Agregar Parámetro
+                </button>
+              </div>
+              <div className="space-y-4">
+                {parameters.map((param, index) => (
+                  <div key={index} className="flex flex-col gap-4 p-5 bg-slate-50 rounded-[1.5rem] relative group border border-slate-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] uppercase font-black text-slate-400 mb-1.5 block tracking-wider">Parámetro</label>
+                        <input 
+                          placeholder="Ej. Hemoglobina"
+                          value={param.name}
+                          onChange={(e) => updateParameter(index, 'name', e.target.value)}
+                          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all font-bold text-slate-700"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase font-black text-slate-400 mb-1.5 block tracking-wider">Categoría</label>
+                        <select 
+                          value={param.category || 'Otros'}
+                          onChange={(e) => updateParameter(index, 'category', e.target.value)}
+                          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all font-medium text-slate-600"
+                        >
+                          {LAB_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                      <div>
+                        <label className="text-[10px] uppercase font-black text-slate-400 mb-1.5 block tracking-wider">Valor</label>
+                        <input 
+                          placeholder="Resultado"
+                          value={param.value}
+                          onChange={(e) => updateParameter(index, 'value', e.target.value)}
+                          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white font-black text-brand-700 focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase font-black text-slate-400 mb-1.5 block tracking-wider">Unidad</label>
+                        <input 
+                          placeholder="Unidad"
+                          value={param.unit}
+                          onChange={(e) => updateParameter(index, 'unit', e.target.value)}
+                          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all font-medium text-slate-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase font-black text-slate-400 mb-1.5 block tracking-wider">Rango Ref.</label>
+                        <input 
+                          placeholder="Rango"
+                          value={param.referenceRange}
+                          onChange={(e) => updateParameter(index, 'referenceRange', e.target.value)}
+                          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all font-medium text-slate-600"
+                        />
+                      </div>
+                      <div className="flex gap-2 items-center">
+                        <div className="flex-1">
+                          <label className="text-[10px] uppercase font-black text-slate-400 mb-1.5 block tracking-wider">Estado</label>
+                          <select 
+                            value={param.status}
+                            onChange={(e) => updateParameter(index, 'status', e.target.value as any)}
+                            className={`w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white font-black focus:ring-2 focus:ring-brand-500 outline-none transition-all ${
+                              param.status === 'Alto' ? 'text-red-600' : param.status === 'Bajo' ? 'text-amber-600' : 'text-emerald-600'
+                            }`}
+                          >
+                            <option value="Normal">Normal</option>
+                            <option value="Alto">Alto</option>
+                            <option value="Bajo">Bajo</option>
+                          </select>
+                        </div>
+                        {parameters.length > 1 && (
+                          <button 
+                            type="button"
+                            onClick={() => removeParameter(index)}
+                            className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100 flex-shrink-0"
+                          >
+                            <Trash2 size={20} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] uppercase font-black text-slate-400 mb-1.5 block tracking-wider">Análisis / Comentario del Parámetro</label>
+                      <input 
+                        placeholder="Análisis específico para este parámetro (opcional)"
+                        value={param.analysis}
+                        onChange={(e) => updateParameter(index, 'analysis', e.target.value)}
+                        className="w-full px-4 py-2.5 border border-slate-100 rounded-xl text-sm bg-white/50 italic text-slate-600 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-slate-100 pt-6">
+              <div>
+                <label className="block text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <Sparkles className="text-brand-600" size={20} />
+                  Análisis General / Conclusiones
+                </label>
+                <textarea 
+                  value={generalAnalysis}
+                  onChange={(e) => setGeneralAnalysis(e.target.value)}
+                  rows={6}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none resize-none bg-white"
+                  placeholder="Escriba aquí el análisis global de los resultados..."
+                />
+              </div>
+              <div>
+                <label className="block text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <FileText className="text-brand-600" size={20} />
+                  Documento Original
+                </label>
+                <div className="relative group">
+                  {previewUrl ? (
+                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+                      <img src={previewUrl} alt="Preview" className="w-full h-[164px] object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button 
+                          type="button"
+                          onClick={handleOpenPreview}
+                          className="bg-white text-slate-900 p-3 rounded-full hover:bg-brand-50 transition-all hover:scale-110 shadow-lg"
+                          title="Ver documento original extendido"
+                        >
+                          <FileSearch size={28} className="text-brand-600" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div 
+                      className="border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center hover:bg-slate-50 cursor-pointer h-[164px] flex flex-col items-center justify-center transition-all"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <UploadCloud className="w-8 h-8 text-slate-400 mb-2" />
+                      <p className="text-xs text-slate-500 font-medium">No hay documento adjunto</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="w-full md:w-1/3">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Bacteriólogo Responsable</label>
+                <select 
+                  value={bacteriologist}
+                  onChange={(e) => setBacteriologist(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+                >
+                  {PROFESSIONALS.map(p => (
+                    <option key={p.id} value={p.name}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-wrap gap-4">
+                <button 
+                  type="button"
+                  onClick={handleDownloadPreview}
+                  className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 bg-slate-100 text-slate-700 rounded-2xl hover:bg-slate-200 transition-all font-bold"
+                >
+                  <Download size={20} />
+                  Vista Previa PDF
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isSaving}
+                  className="flex-1 md:flex-none bg-brand-600 text-white px-10 py-4 rounded-2xl font-bold hover:bg-brand-700 transition-all disabled:opacity-50 flex items-center justify-center gap-3 shadow-xl shadow-brand-200"
+                >
+                  {isSaving ? <RefreshCw className="animate-spin" size={20} /> : <Save size={24} />}
+                  Guardar y Generar Informe
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+        <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
+          <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 p-8 overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-4 opacity-5">
+              <ShieldCheck size={120} className="text-brand-600" />
+            </div>
+            
+            <div className="flex items-center gap-4 mb-6">
+              <div className="bg-brand-600 text-white p-3 rounded-2xl shadow-lg shadow-brand-100 shrink-0">
+                <ShieldCheck size={24} />
+              </div>
+              <div>
+                <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest">Seguridad de la Información</h3>
+                <p className="text-[10px] text-brand-600 font-bold tracking-tight">CUSTODIA DE DATOS CLÍNICOS</p>
+              </div>
+            </div>
+            
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-brand-500 rounded-full"></div>
+                  Aviso de Privacidad
+                </h4>
+                <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                  La información y resultados de laboratorio contenidos en este sistema son considerados <strong>Datos Sensibles</strong> de acuerdo con la <strong>Ley 1581 de 2012</strong>.
+                </p>
+                <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                  Su tratamiento está estrictamente limitado al personal de salud autorizado para garantizar la atención médica y vigilancia epidemiológica.
+                </p>
+              </div>
+              
+              <div className="space-y-3">
+                <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
+                  Cumplimiento Normativo
+                </h4>
+                <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                  En cumplimiento del <strong>Decreto 780 de 2016</strong> y la <strong>Resolución 1619 de 2015</strong>, se garantiza trazabilidad (logs), copias de seguridad cifradas, integridad y confidencialidad.
+                </p>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100">
+                <div className="bg-slate-50 p-4 rounded-2xl">
+                  <p className="text-[10px] text-slate-400 leading-tight italic font-medium">
+                    "Garantizamos la absoluta confidencialidad, integridad y disponibilidad de la información de salud."
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      )}
-
-      {mode === 'upload' ? (
-        <div className="space-y-8">
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="lg:col-span-8 space-y-8">
           {/* Basic Info Form in Upload Mode */}
-          <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 p-8">
+          <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 p-8 text-left">
             <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
               <Info className="text-brand-600" size={24} />
               1. Datos Básicos del Paciente
@@ -711,49 +1044,50 @@ export const LaboratorioAnalysis: React.FC = () => {
               className="border-4 border-dashed border-slate-100 rounded-[2rem] p-16 hover:border-brand-200 hover:bg-brand-50/30 transition-all cursor-pointer group relative overflow-hidden"
               onClick={() => fileInputRef.current?.click()}
             >
-            <input 
-              ref={fileInputRef}
-              type="file" 
-              accept="image/*,application/pdf" 
-              className="hidden" 
-              onChange={onFileSelected}
-            />
-            
-            {isAnalyzing || isSaving ? (
-              <div className="flex flex-col items-center animate-in fade-in duration-500">
-                <div className="relative mb-8">
-                  <div className="absolute inset-0 bg-brand-200 blur-2xl opacity-20 animate-pulse"></div>
-                  <div className="relative bg-white p-6 rounded-3xl shadow-xl">
-                    <RefreshCw className="w-16 h-16 text-brand-600 animate-spin" />
+              <input 
+                ref={fileInputRef}
+                type="file" 
+                accept="image/*,application/pdf" 
+                className="hidden" 
+                onChange={onFileSelected}
+              />
+              
+              {isAnalyzing || isSaving ? (
+                <div className="flex flex-col items-center animate-in fade-in duration-500">
+                  <div className="relative mb-8">
+                    <div className="absolute inset-0 bg-brand-200 blur-2xl opacity-20 animate-pulse"></div>
+                    <div className="relative bg-white p-6 rounded-3xl shadow-xl">
+                      <RefreshCw className="w-16 h-16 text-brand-600 animate-spin" />
+                    </div>
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-800 mb-2">Procesando Documento</h2>
+                  <p className="text-slate-500 max-w-xs mx-auto">
+                    La Inteligencia Artificial está analizando los resultados y extrayendo la información...
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center group-hover:scale-105 transition-transform duration-500">
+                  <div className="relative mb-8">
+                    <div className="absolute inset-0 bg-brand-100 blur-2xl opacity-0 group-hover:opacity-50 transition-opacity"></div>
+                    <div className="relative bg-brand-50 p-8 rounded-[2rem] text-brand-600 group-hover:bg-brand-600 group-hover:text-white transition-all duration-500">
+                      <UploadCloud size={64} />
+                    </div>
+                  </div>
+                  <h2 className="text-3xl font-bold text-slate-800 mb-4">Sube tu Informe</h2>
+                  <p className="text-lg text-slate-500 mb-8 max-w-md mx-auto">
+                    Arrastra tu PDF o imagen aquí, o haz clic para seleccionar el archivo de laboratorio.
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-4">
+                    <span className="px-4 py-2 bg-slate-100 text-slate-600 rounded-full text-sm font-medium">PDF</span>
+                    <span className="px-4 py-2 bg-slate-100 text-slate-600 rounded-full text-sm font-medium">JPG / PNG</span>
+                    <span className="px-4 py-2 bg-brand-50 text-brand-600 rounded-full text-sm font-bold flex items-center gap-2">
+                      <Sparkles size={14} />
+                      Análisis IA
+                    </span>
                   </div>
                 </div>
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">Procesando Documento</h2>
-                <p className="text-slate-500 max-w-xs mx-auto">
-                  La Inteligencia Artificial está analizando los resultados y extrayendo la información...
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center group-hover:scale-105 transition-transform duration-500">
-                <div className="relative mb-8">
-                  <div className="absolute inset-0 bg-brand-100 blur-2xl opacity-0 group-hover:opacity-50 transition-opacity"></div>
-                  <div className="relative bg-brand-50 p-8 rounded-[2rem] text-brand-600 group-hover:bg-brand-600 group-hover:text-white transition-all duration-500">
-                    <UploadCloud size={64} />
-                  </div>
-                </div>
-                <h2 className="text-3xl font-bold text-slate-800 mb-4">Sube tu Informe</h2>
-                <p className="text-lg text-slate-500 mb-8 max-w-md mx-auto">
-                  Arrastra tu PDF o imagen aquí, o haz clic para seleccionar el archivo de laboratorio.
-                </p>
-                <div className="flex flex-wrap justify-center gap-4">
-                  <span className="px-4 py-2 bg-slate-100 text-slate-600 rounded-full text-sm font-medium">PDF</span>
-                  <span className="px-4 py-2 bg-slate-100 text-slate-600 rounded-full text-sm font-medium">JPG / PNG</span>
-                  <span className="px-4 py-2 bg-brand-50 text-brand-600 rounded-full text-sm font-bold flex items-center gap-2">
-                    <Sparkles size={14} />
-                    Análisis IA
-                  </span>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
           
           <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
@@ -762,8 +1096,8 @@ export const LaboratorioAnalysis: React.FC = () => {
                 <FileText size={24} />
               </div>
               <div>
-                <h3 className="font-bold text-slate-800 mb-1">Digitalización</h3>
-                <p className="text-sm text-slate-500 leading-relaxed">Convierte automáticamente informes físicos en datos digitales estructurados.</p>
+                <h3 className="font-bold text-slate-800 mb-1 text-sm">Digitalización</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">Convierte automáticamente informes físicos en datos digitales estructurados.</p>
               </div>
             </div>
             <div className="flex gap-4">
@@ -771,8 +1105,8 @@ export const LaboratorioAnalysis: React.FC = () => {
                 <Sparkles size={24} />
               </div>
               <div>
-                <h3 className="font-bold text-slate-800 mb-1">Análisis Inteligente</h3>
-                <p className="text-sm text-slate-500 leading-relaxed">Detección automática de parámetros fuera de rango y análisis clínico preliminar.</p>
+                <h3 className="font-bold text-slate-800 mb-1 text-sm">Análisis Inteligente</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">Detección automática de parámetros fuera de rango y análisis clínico preliminar.</p>
               </div>
             </div>
             <div className="flex gap-4">
@@ -780,286 +1114,63 @@ export const LaboratorioAnalysis: React.FC = () => {
                 <Download size={24} />
               </div>
               <div>
-                <h3 className="font-bold text-slate-800 mb-1">Reporte Unificado</h3>
-                <p className="text-sm text-slate-500 leading-relaxed">Genera un nuevo PDF con el análisis digital y el documento original adjunto.</p>
+                <h3 className="font-bold text-slate-800 mb-1 text-sm">Reporte Unificado</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">Genera un nuevo PDF con el análisis digital y el documento original adjunto.</p>
               </div>
-            </div>
             </div>
           </div>
         </div>
-      ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-8">
-          <form onSubmit={handleSave} className="space-y-8">
-            {/* Patient Info Section */}
-            <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
-              <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                <Info className="text-brand-600" size={20} />
-                Información del Paciente
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Nombre Completo del Paciente</label>
-                  <input 
-                    type="text" 
-                    value={patientName}
-                    onChange={handlePatientNameChange}
-                    className="w-full px-4 py-2 border border-brand-300 ring-2 ring-brand-100 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white transition-all"
-                    placeholder="NOMBRE COMPLETO"
-                  />
-                  <p className="text-[10px] text-brand-600 font-bold mt-1 uppercase">Verifica que este nombre coincida con el documento</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Solicitud</label>
-                  <input 
-                    type="text" 
-                    value={solicitudNumber}
-                    onChange={(e) => setSolicitudNumber(e.target.value)}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
-                    placeholder="Número de Solicitud"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Identificación</label>
-                  <input 
-                    type="text" 
-                    value={clinicalHistoryNumber}
-                    onChange={(e) => setClinicalHistoryNumber(e.target.value)}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
-                    placeholder="C.C. / H.C."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">EPS</label>
-                  <input 
-                    type="text" 
-                    value={eps}
-                    onChange={(e) => setEps(e.target.value)}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
-                    placeholder="Nombre de EPS"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Edad</label>
-                  <input 
-                    type="text" 
-                    value={age}
-                    onChange={(e) => setAge(e.target.value)}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
-                    placeholder="Ej. 30 años"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Fecha Recepción</label>
-                  <input 
-                    type="date" 
-                    value={receptionDate}
-                    onChange={(e) => setReceptionDate(e.target.value)}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Fecha Toma Muestra</label>
-                  <input 
-                    type="date" 
-                    value={sampleDate}
-                    onChange={(e) => setSampleDate(e.target.value)}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
-                  />
-                </div>
-                <div className="md:col-span-2 lg:col-span-2">
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Tipo de Estudio</label>
-                  <input 
-                    type="text" 
-                    value={studyType}
-                    onChange={(e) => setStudyType(e.target.value)}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
-                    placeholder="Ej. Cuadro Hemático"
-                  />
-                </div>
+
+        <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
+          <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-200 p-8 overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-4 opacity-5">
+              <ShieldCheck size={120} className="text-brand-600" />
+            </div>
+            
+            <div className="flex items-center gap-4 mb-6">
+              <div className="bg-brand-600 text-white p-3 rounded-2xl shadow-lg shadow-brand-100 shrink-0">
+                <ShieldCheck size={24} />
+              </div>
+              <div>
+                <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest">Seguridad de la Información</h3>
+                <p className="text-[10px] text-brand-600 font-bold tracking-tight">CUSTODIA DE DATOS CLÍNICOS</p>
               </div>
             </div>
-
-            <div className="border-t border-slate-100 pt-6">
-              <div className="flex items-center justify-between mb-4">
-                <label className="block text-lg font-bold text-slate-800">Parámetros del Laboratorio</label>
-                <button 
-                  type="button"
-                  onClick={addParameter}
-                  className="flex items-center gap-2 text-brand-600 font-bold hover:bg-brand-50 px-4 py-2 rounded-xl transition-all"
-                >
-                  <Plus size={20} />
-                  Agregar Parámetro
-                </button>
+            
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-brand-500 rounded-full"></div>
+                  Aviso de Privacidad
+                </h4>
+                <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                  La información y resultados de laboratorio contenidos en este sistema son considerados <strong>Datos Sensibles</strong> de acuerdo con la <strong>Ley 1581 de 2012</strong>.
+                </p>
+                <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                  Su tratamiento está estrictamente limitado al personal de salud autorizado para garantizar la atención médica y vigilancia epidemiológica.
+                </p>
               </div>
-              <div className="space-y-4">
-                {parameters.map((param, index) => (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-3 p-4 bg-slate-50 rounded-xl relative group border border-slate-100">
-                    <div className="md:col-span-3">
-                      <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Parámetro</label>
-                      <input 
-                        placeholder="Ej. Hemoglobina"
-                        value={param.name}
-                        onChange={(e) => updateParameter(index, 'name', e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Categoría</label>
-                      <select 
-                        value={param.category || 'Otros'}
-                        onChange={(e) => updateParameter(index, 'category', e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-                      >
-                        {LAB_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    <div className="md:col-span-1">
-                      <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Valor</label>
-                      <input 
-                        placeholder="Resultado"
-                        value={param.value}
-                        onChange={(e) => updateParameter(index, 'value', e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-bold"
-                      />
-                    </div>
-                    <div className="md:col-span-1">
-                      <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Unidad</label>
-                      <input 
-                        placeholder="Unidad"
-                        value={param.unit}
-                        onChange={(e) => updateParameter(index, 'unit', e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Rango Ref.</label>
-                      <input 
-                        placeholder="Rango"
-                        value={param.referenceRange}
-                        onChange={(e) => updateParameter(index, 'referenceRange', e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-                      />
-                    </div>
-                    <div className="md:col-span-2 flex gap-2">
-                      <div className="flex-1">
-                        <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Estado</label>
-                        <select 
-                          value={param.status}
-                          onChange={(e) => updateParameter(index, 'status', e.target.value as any)}
-                          className={`w-full px-2 py-2 border border-slate-300 rounded-lg text-sm bg-white font-bold ${
-                            param.status === 'Alto' ? 'text-red-600' : param.status === 'Bajo' ? 'text-amber-600' : 'text-emerald-600'
-                          }`}
-                        >
-                          <option value="Normal">Normal</option>
-                          <option value="Alto">Alto</option>
-                          <option value="Bajo">Bajo</option>
-                        </select>
-                      </div>
-                      {parameters.length > 1 && (
-                        <div className="flex items-end">
-                          <button 
-                            type="button"
-                            onClick={() => removeParameter(index)}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors mb-0.5"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="md:col-span-12">
-                      <input 
-                        placeholder="Análisis específico para este parámetro (opcional)"
-                        value={param.analysis}
-                        onChange={(e) => updateParameter(index, 'analysis', e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white italic"
-                      />
-                    </div>
+              
+              <div className="space-y-3">
+                <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
+                  Cumplimiento Normativo
+                </h4>
+                <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                  En cumplimiento del <strong>Decreto 780 de 2016</strong> y la <strong>Resolución 1619 de 2015</strong>, se garantiza trazabilidad (logs), copias de seguridad cifradas, integridad y confidencialidad.
+                </p>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100">
+                <div className="bg-slate-50 p-4 rounded-2xl">
+                  <p className="text-[10px] text-slate-400 leading-tight italic font-medium">
+                    "Garantizamos la absoluta confidencialidad, integridad y disponibilidad de la información de salud."
+                    </p>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-slate-100 pt-6">
-              <div>
-                <label className="block text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                  <Sparkles className="text-brand-600" size={20} />
-                  Análisis General / Conclusiones
-                </label>
-                <textarea 
-                  value={generalAnalysis}
-                  onChange={(e) => setGeneralAnalysis(e.target.value)}
-                  rows={6}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none resize-none bg-white"
-                  placeholder="Escriba aquí el análisis global de los resultados..."
-                />
-              </div>
-              <div>
-                <label className="block text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                  <FileText className="text-brand-600" size={20} />
-                  Documento Original
-                </label>
-                <div className="relative group">
-                  {previewUrl ? (
-                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
-                      <img src={previewUrl} alt="Preview" className="w-full h-[164px] object-cover" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <button 
-                          type="button"
-                          onClick={handleOpenPreview}
-                          className="bg-white text-slate-900 p-3 rounded-full hover:bg-brand-50 transition-all hover:scale-110 shadow-lg"
-                          title="Ver documento original extendido"
-                        >
-                          <FileSearch size={28} className="text-brand-600" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div 
-                      className="border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center hover:bg-slate-50 cursor-pointer h-[164px] flex flex-col items-center justify-center transition-all"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <UploadCloud className="w-8 h-8 text-slate-400 mb-2" />
-                      <p className="text-xs text-slate-500 font-medium">No hay documento adjunto</p>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
-
-            <div className="border-t border-slate-100 pt-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div className="w-full md:w-1/3">
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Bacteriólogo Responsable</label>
-                <select 
-                  value={bacteriologist}
-                  onChange={(e) => setBacteriologist(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none bg-white"
-                >
-                  {PROFESSIONALS.map(p => (
-                    <option key={p.id} value={p.name}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-wrap gap-4">
-                <button 
-                  type="button"
-                  onClick={handleDownloadPreview}
-                  className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 bg-slate-100 text-slate-700 rounded-2xl hover:bg-slate-200 transition-all font-bold"
-                >
-                  <Download size={20} />
-                  Vista Previa PDF
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={isSaving}
-                  className="flex-1 md:flex-none bg-brand-600 text-white px-10 py-4 rounded-2xl font-bold hover:bg-brand-700 transition-all disabled:opacity-50 flex items-center justify-center gap-3 shadow-xl shadow-brand-200"
-                >
-                  {isSaving ? <RefreshCw className="animate-spin" size={20} /> : <Save size={24} />}
-                  Guardar y Generar Informe
-                </button>
-              </div>
-            </div>
-          </form>
+          </div>
         </div>
       )}
 
